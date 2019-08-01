@@ -13,7 +13,7 @@ export default class Checkin extends EventEmitter {
     debug(`Start for ${options.users.length} user(s)`);
 
     this.start = +(new Date());
-    this.inviter = options.inviter;
+    //this.inviter = options.inviter;
     this.channel = options.channel;
     this.timeout = options.timeout;
 
@@ -61,5 +61,9 @@ export default class Checkin extends EventEmitter {
 
   getWaitingFor() {
     return Object.keys(this.responses).filter((user) => {return !('blocking' in this.responses[user]);});
+  }
+  
+    getNoReplyUsers() {
+    return Object.keys(this.responses).filter((user) => {return !('worked' in this.responses[user]);});
   }
 }

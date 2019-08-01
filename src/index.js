@@ -5,17 +5,26 @@ import pkg from '../package.json';
 import moment from 'moment';
 import Debug from 'debug';
 import Checkin from './checkin';
-
 let debug = Debug(pkg.name);
+var schedule = require('node-schedule');
+var os = require("os");
+
+let time = (process.env.TIME).split(":")
+var rule = new schedule.RecurrenceRule();
+rule.dayOfWeek = [new schedule.Range(1, 5)];
+rule.hour = time[0]; // UTC 
+rule.minute = time[1]; // TimeZone
+ 
+
+
 
 const hasBrackets = /^<(.+)>$/,
   slackToken = process.env.SCRUMBOT_TOKEN,
   script = {
-    greeting: inviter => `Hi! @${inviter} wanted me to checkin with you.
-_Please provide a short (*one-line*) answer to each question._`,
+    greeting: `Hello, it's time to start your daily standup._ Please provide a short (*one-line*) answer to each question._`,
+    worked: 'What did you accomplish yesterday?',
     working: 'What are you working on right now?',
-    timing: 'When do you think you will be done with this?',
-    blocking: 'Is there anything blocking your progress on this?',
+    blocking: 'What obstacles are impeding your progress?',
     thankyou: 'Alright. Thank you for this update!'
   },
   slack = new Slack(slackToken, true);
@@ -44,8 +53,8 @@ slack.on('message', (message) => {
   case 'channel_join':
     if (slack.self.id === message.user) {
       let channel = slack.getChannelGroupOrDMByID(message.channel);
-      channel.send(`Hi folks, @${slack.self.name} is here to help run pre-standup checkins.
-Say *@${slack.self.name} checkin* to get started.`);
+      channel.send(`Hi folks, @${slack.self.name} is here to help run pre-standup scrum.
+Say *@${slack.self.name} help* to get started.`);
     }
 
     break;
@@ -60,7 +69,51 @@ Say *@${slack.self.name} checkin* to get started.`);
   }
 });
 
+
+
+
+function startScrum (channel){
+	
+if (checkin) {
+          channel.send(`I'm already doing a scrum. It will be finished in ${moment.duration((checkin.start + checkin.timeout) - new Date()).humanize()} minutes.`);
+        } else {
+          //let inviter = slack.getUserByID(message.user);
+          let users = process.env.SCRUM_USERS.split(" ");
+
+          if (users.size <= 0) {
+            channel.send(`Please give me some people to do a checkin with.`);
+          } else {
+            checkin = new Checkin({
+              timeout: pkg.config.waitMinutes * 60 * 1000,
+              channel: channel,
+              users: Array.from(users)
+            });
+
+            checkin.on('end', finale);
+
+            channel.send(`Alright, I'm going to start a pre-standup scrum.
+I'll report back here when everyone replied or in ${moment.duration(checkin.timeout).humanize()}, whatever comes first.`);
+           
+            users.forEach((id) => {
+              slack.openDM(id, (result) => {
+                let dm = slack.getChannelGroupOrDMByID(result.channel.id);
+
+                if (!dm) {
+                  console.error(`Could not retrieve DM channel for user '${result.channel.id}'.`);
+                } else {
+					//console.log(id)
+                    dm.send(`${script.greeting}`);
+                    dm.send(`${script.worked}`);
+                }
+              });
+            });
+          }
+        }	
+	
+}
+
 function handleMessage (message) {
+	
   let channel = slack.getChannelGroupOrDMByID(message.channel);
 
   switch ((message.channel || '').substr(0, 1).toUpperCase()) {
@@ -73,64 +126,8 @@ function handleMessage (message) {
       let cmd = message.text.split(' ').slice(1);
 
       switch (cmd[0]) {
-      case 'checkin':
-        if (checkin) {
-          channel.send(`I'm already doing a checkin. It will be finished in ${moment.duration((checkin.start + checkin.timeout) - new Date()).humanize()} minutes.`);
-        } else {
-          let inviter = slack.getUserByID(message.user),
-            users = cmd.slice(1).reduce((users, id) => {
-              id = id.trim();
-
-              if (hasBrackets.test(id)) {
-                let prefix = id.substr(1, 1);
-                id = id.substr(2, id.length - 3);
-
-                switch (prefix) {
-                case '@':
-                  users.add(id);
-                  break;
-                case '!':
-                  if (id === 'channel') {
-                    channel.members.forEach(user => users.add(user));
-                  }
-                }
-              }
-
-              return users;
-            }, new Set());
-
-          users.delete(slack.self.id);
-
-          if (users.size <= 0) {
-            channel.send(`Please give me some people to do a checkin with.`);
-          } else {
-            checkin = new Checkin({
-              timeout: pkg.config.waitMinutes * 60 * 1000,
-              inviter: message.user,
-              channel: message.channel,
-              users: Array.from(users)
-            });
-
-            checkin.on('end', finale);
-
-            channel.send(`Alright, I'm going to start a checkin.
-I'll report back here when everyone replied or in ${moment.duration(checkin.timeout).humanize()}, whatever comes first.`);
-
-            users.forEach((id) => {
-              slack.openDM(id, (result) => {
-                let dm = slack.getChannelGroupOrDMByID(result.channel.id);
-
-                if (!dm) {
-                  console.error(`Could not retrieve DM channel for user '${result.channel.id}'.`);
-                } else {
-                  dm.send(script.greeting(inviter.name));
-                  dm.send(`${script.working}`);
-                }
-              });
-            });
-          }
-        }
-
+      case 'scrum':
+		startScrum (channel)
         break;
       case 'stop':
         if (checkin) {
@@ -173,15 +170,17 @@ I will wait ${moment.duration((checkin.start + checkin.timeout) - new Date()).mi
         break;
       case 'help':
         channel.send(`There is only a _limited_ set of problems I can help you with.
-That would currently be \`checkin\`, \`stop\`, \`status\` and \`version\`.`);
+That would currently be \`scrum\`, \`stop\` , \`status\`  and \`info\`.`);
 
         break;
-      case 'version':
-        channel.send(`My internals are labeled ${pkg.version}.`);
+      case 'info':
+		let myStr = process.env.SCRUM_USERS
+		var newStr = '<@'+myStr.replace(/ /g, "> <@")+'>';
+        channel.send(`I am hosted at: ${os.hostname()}\n I will start pre standup scrum at: ${process.env.TIME} UTC \n I'll notify these guys for scrum updates: ${newStr} `);
 
         break;
       default:
-        channel.send(`I learnt English from a book.`);
+        channel.send(`I don't understand this.`);
 
         break;
       }
@@ -192,30 +191,35 @@ That would currently be \`checkin\`, \`stop\`, \`status\` and \`version\`.`);
     // direct message
     if (checkin && (message.user in checkin.responses)) {
       let response = checkin.responses[message.user];
-
-      if (!('working' in response)) {
+      console.log(response)
+      if (!('worked' in response)) {
+        checkin.addResponse('worked', message.user, message.text);
+        channel.send(`${script.working}`);
+      } else if (!('working' in response)) {
         checkin.addResponse('working', message.user, message.text);
-        channel.send(`${script.timing}`);
-      } else if (!('timing' in response)) {
-        checkin.addResponse('timing', message.user, message.text);
         channel.send(`${script.blocking}`);
       } else if (!('blocking' in response)) {
         checkin.addResponse('blocking', message.user, message.text);
         channel.send(script.thankyou);
       }
-    }
-
+    } else {
+		//slack.getUserByID(message.user)
+		console.log(message.text)
+		channel.send("Direct messaging is yet to be implemented.");
+		
+	}
+     
     break;
   }
 }
 
 function finale () {
-  let channel = slack.getChannelGroupOrDMByID(checkin.channel);
+  let channel = checkin.channel;
 
-  let listResult = (title, responses) => `>>>*${title}*\n${responses.join('\n')}`,
-    inviter = slack.getUserByID(checkin.inviter);
+  let listResult = (title, responses) => `>>>*${title}*\n${responses.join('\n')}`;
+   // inviter = slack.getUserByID(checkin.inviter);
 
-  channel.send(`@${inviter.name}, I'm done with the checkin:`);
+  channel.send(`Hey, daily standup complete`);
 
   let result = Object.keys(checkin.responses).reduce((result, id) => {
     let user = slack.getUserByID(id),
@@ -225,8 +229,8 @@ function finale () {
       result.working.push(`@${user.name}: ${response.working}`);
     }
 
-    if (response.timing) {
-      result.timing.push(`@${user.name}: ${response.timing}`);
+    if (response.worked) {
+      result.worked.push(`@${user.name}: ${response.worked}`);
     }
 
     if (response.blocking) {
@@ -236,15 +240,44 @@ function finale () {
     return result;
   }, {
     working: [],
-    timing: [],
+    worked: [],
     blocking: []
   });
-
+  channel.send(listResult(script.worked, result.worked));
   channel.send(listResult(script.working, result.working));
-  channel.send(listResult(script.timing, result.timing));
   channel.send(listResult(script.blocking, result.blocking));
-
+  
+  let AbsentUsers = checkin.getNoReplyUsers();
+  console.log(AbsentUsers.size)
+  if (AbsentUsers.length > 0) {
+  channel.send(`I didn't hear anything from
+  ${AbsentUsers.reduce((result, id, idx, all) => {
+    let user = slack.getUserByID(id);
+  
+    if (user) {
+      if (result) {
+        if (idx === all.length - 1) {
+		result = `${result} and <@{id}>`;
+        } else {
+          result = `${result}, <@${id}>`;
+        }
+      } else {
+        result = `<@${id}>`;
+      }
+    }
+  
+    return result;
+  }, '')}`);
+  } 
+    
+  
   checkin = null;
 }
 
 slack.login();
+
+var j = schedule.scheduleJob(rule, function(){
+  console.log('Scheduled scrum started....');
+  let channel = slack.getChannelGroupOrDMByID(process.env.CHANNEL_ID);
+  startScrum (channel);
+});

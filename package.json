@@ -1,9 +1,9 @@
 {
   "name": "slack-scrumbot",
   "version": "0.1.5",
-  "description": "A Slack bot that performs a pre-standup checkin.",
+  "description": "A Slack bot that performs a pre-standup scrum.",
   "config": {
-    "waitMinutes": 10
+    "waitMinutes": 1
   },
   "main": "bot.js",
   "scripts": {
@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/smhg/slack-scrumbot.git"
+    "url": "https://github.com/sumjha/slack-scrumbot.git"
   },
   "keywords": [
     "slack",
@@ -29,6 +29,7 @@
     "debug": "^2.2.0",
     "forever": "^0.15.3",
     "moment": "^2.22.2",
+    "node-schedule": "^1.3.2",
     "slack-client": "^1.5.0"
   },
   "devDependencies": {
