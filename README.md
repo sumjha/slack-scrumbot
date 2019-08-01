@@ -3,36 +3,39 @@
 
 ## Installation
 ```bash
-$ npm install slack-scrumbot
+$ npm install
 ```
 
 ## Usage
 Add a bot in Slack's **Integrations** panel. Copy the token.
+
+#### Configure
+```bash
+export SCRUMBOT_TOKEN=your_slack_token
+export TIME=Time in UTC eg. (9:40) for auto scrum start
+export SCRUM_USERS="space seperated userids"
+export CHANNEL_ID=Slack channel id
+
+```
+
 #### Start bot
 ```bash
-$ SCRUMBOT_TOKEN=your_slack_token npm start
+npm start
 ```
 Invite the bot to a channel:
 ```
-/invite botname
+/invite @botname
 ```
 
-#### Start a checkin
-Write a message to the bot listing the users to do a checkin with:
+#### Start/Stop a scrum manually
 ```
-@botname: checkin @username1 @username2 @username3
+@botname: scrum
 ```
-Or write a message to the channel to do a checkin with everyone:
 ```
-@botname: checkin @channel
+@botname: stop
 ```
 
 #### Stop bot
 ```bash
 $ npm stop
-```
-
-## Development
-```bash
-$ DEBUG=slack-scrumbot* SLACK_LOG_LEVEL=debug SCRUMBOT_TOKEN=your_slack_token npm run watch
 ```
