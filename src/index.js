@@ -42,6 +42,16 @@ slack.on('open', () => {
   toMe = new RegExp(`^<@${slack.self.id}>`);
 });
 
+slack.on('goodbye', () => {
+debug(`Good Bye received`);
+slack.login();
+});
+
+slack.on('close', () => {
+debug(`slack close`);
+slack.login();
+});
+
 slack.on('error', (err) => {
   console.error(`Error ${err}`);
 });
@@ -51,10 +61,13 @@ slack.on('message', (message) => {
   switch (message.subtype) {
   case 'group_join':
   case 'channel_join':
+   let channel = slack.getChannelGroupOrDMByID(message.channel);
     if (slack.self.id === message.user) {
       let channel = slack.getChannelGroupOrDMByID(message.channel);
+	  if(message.channel === (process.env.CHANNEL_ID).trim()) {
       channel.send(`Hi folks, @${slack.self.name} is here to help run pre-standup scrum.
-Say *@${slack.self.name} help* to get started.`);
+	Say *@${slack.self.name} help* to get started.`);
+	} else channel.send(`You are not authorized to use this bot in this channel`);
     }
 
     break;
@@ -122,6 +135,10 @@ function handleMessage (message) {
   case 'C':
     // channel message
     if (toMe.test(message.text)) {
+		if(message.channel !== (process.env.CHANNEL_ID).trim()) {
+			channel.send(`You are not Authorized for this operation`);
+			break;
+	   }	
       // commands
       let cmd = message.text.split(' ').slice(1);
 
@@ -176,7 +193,7 @@ That would currently be \`scrum\`, \`stop\` , \`status\`  and \`info\`.`);
       case 'info':
 		let myStr = process.env.SCRUM_USERS
 		var newStr = '<@'+myStr.replace(/ /g, "> <@")+'>';
-        channel.send(`I am hosted at: ${os.hostname()}\n I will start pre standup scrum at: ${process.env.TIME} UTC \n I'll notify these guys for scrum updates: ${newStr} `);
+        channel.send(`I will start pre standup scrum at: ${process.env.TIME} UTC \n I'll notify these guys for scrum updates: ${newStr} `);
 
         break;
       default:
@@ -191,7 +208,7 @@ That would currently be \`scrum\`, \`stop\` , \`status\`  and \`info\`.`);
     // direct message
     if (checkin && (message.user in checkin.responses)) {
       let response = checkin.responses[message.user];
-      console.log(response)
+      console.log(message.text)
       if (!('worked' in response)) {
         checkin.addResponse('worked', message.user, message.text);
         channel.send(`${script.working}`);
@@ -257,7 +274,7 @@ function finale () {
     if (user) {
       if (result) {
         if (idx === all.length - 1) {
-		result = `${result} and <@{id}>`;
+		result = `${result} and <@${id}>`;
         } else {
           result = `${result}, <@${id}>`;
         }
